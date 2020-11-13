@@ -1,0 +1,58 @@
+---
+- name : "Création du répertoire racine pour l'instance {{ item }}"
+  file:
+    path: "{{ wildfly.basedir_prefix }}{{ item }}/"
+    state: directory
+    owner: "{{ wildfly.user }}"
+    group: "{{ wildfly.user }}"
+    mode: '0755'
+
+- name : "Création du sous-répertoire de déploiements pour l'instance {{ item }}"
+  file:
+    path: "{{ wildfly.basedir_prefix }}{{ item }}/deployments"
+    state: directory
+    owner: "{{ wildfly.user }}"
+    group: "{{ wildfly.user }}"
+    mode: '0755'
+
+- name: "Création du fichier de configuration de l'instance {{ item }}"
+  copy:
+    src: "{{ wildfly.home }}/standalone/configuration/{{ wildfly.base_config }}"
+    dest: "{{ wildfly.home }}/standalone/configuration/{{ wildfly.config_name_prefix }}{{ item }}.xml"
+    group: "{{ wildfly.user }}"
+    owner: "{{ wildfly.user }}"
+    remote_src: true
+    force: no
+
+- name: "Déploiement de la configuration du service système associé"
+  template:
+    src: templates/wildfly.conf.j2
+    dest: "/etc/{{ wildfly.config_name_prefix}}{{ item }}.conf"
+    group: root
+    owner: root
+
+- name: "Mise en place du service associé à l'instance {{ item }}"
+  template:
+    src: templates/wildfly.service.j2
+    dest: "/usr/lib/systemd/system/{{ wildfly.config_name_prefix }}{{ item }}.service"
+    group: root
+    owner: root
+
+- name: "Rafraichissement du paramétrage de SystemD"
+  systemd:
+    daemon_reload: yes
+
+- name: "Démarrage de l'instance Wildfly {{ wildfly.config_name_prefix }}{{ item }}"
+  service:
+    name: "{{ wildfly.config_name_prefix }}{{ item }}"
+      state: started
+      enabled: yes
+
+- name: "Deploiement de l'application {{ app }} depuis l'archive {{ app_path }}"
+  jcliff:
+    wfly_home: "{{ wildfly.home }}"
+    management_port: "{{ 9990 + ((item - 1) * 100) }}"
+    subsystems:
+      - deployments:
+        - name: "{{ app_name }}"
+          path: "{{ app_path }}"
